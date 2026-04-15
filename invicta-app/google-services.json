@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "428730181195",
+    "project_id": "invicta-mobile-51a4a",
+    "storage_bucket": "invicta-mobile-51a4a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:428730181195:android:272d204ffac75019b20fce",
+        "android_client_info": {
+          "package_name": "com.invictaapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYB8h2GSepLbeQPHlNdoqU9YYLQZpCUk0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
