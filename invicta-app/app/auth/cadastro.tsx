@@ -20,6 +20,7 @@ export default function Cadastro() {
   const [loading, setLoading] = useState(false);
 
   async function handleCadastro() {
+    console.log("chamou", { nome, email, senha, confirmar });
     if (!nome || !email || !senha || !confirmar) {
       Alert.alert("Erro", "Preencha todos os campos.");
       return;
@@ -32,16 +33,13 @@ export default function Cadastro() {
       Alert.alert("Erro", "A senha precisa ter pelo menos 6 caracteres.");
       return;
     }
-
     setLoading(true);
     try {
-      // Cria o usuário no Firebase Auth
+      console.log("tentando criar usuário...");
       const { user } = await createUserWithEmailAndPassword(auth, email, senha);
-
-      // Salva o displayName no Auth
+      console.log("usuário criado:", user.uid);
       await updateProfile(user, { displayName: nome });
-
-      // Cria o documento do usuário no Firestore (coleção "users")
+      console.log("profile atualizado");
       await setDoc(doc(db, "users", user.uid), {
         nome,
         email,
@@ -50,9 +48,10 @@ export default function Cadastro() {
         rendaPrevista: 0,
         limiteGastos: 0,
       });
-
-      // O _layout.tsx redireciona automaticamente após auth
+      console.log("firestore salvo");
+      router.replace("/(tabs)");
     } catch (error: any) {
+      console.log("ERRO:", error.code, error.message);
       const msg =
         error.code === "auth/email-already-in-use"
           ? "Esse email já está cadastrado."
@@ -71,14 +70,11 @@ export default function Cadastro() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Criar Conta</Text>
           <Text style={styles.headerSub}>Comece sua jornada financeira</Text>
         </View>
-
         <View style={styles.form}>
-          {/* Nome */}
           <View style={styles.inputWrapper}>
             <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -89,8 +85,6 @@ export default function Cadastro() {
               onChangeText={setNome}
             />
           </View>
-
-          {/* Email */}
           <View style={styles.inputWrapper}>
             <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -103,8 +97,6 @@ export default function Cadastro() {
               onChangeText={setEmail}
             />
           </View>
-
-          {/* Senha */}
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -122,8 +114,6 @@ export default function Cadastro() {
               />
             </TouchableOpacity>
           </View>
-
-          {/* Confirmar senha */}
           <View style={styles.inputWrapper}>
             <Ionicons name="key-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -135,8 +125,6 @@ export default function Cadastro() {
               onChangeText={setConfirmar}
             />
           </View>
-
-          {/* Botão cadastrar */}
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleCadastro}
@@ -147,11 +135,9 @@ export default function Cadastro() {
               : <Text style={styles.buttonText}>Cadastrar</Text>
             }
           </TouchableOpacity>
-
-          {/* Link pro login */}
           <View style={styles.linkRow}>
             <Text style={styles.linkText}>Já tem uma conta? </Text>
-            <TouchableOpacity onPress={() => router.push('/auth/login')}>
+            <TouchableOpacity onPress={() => router.push("/auth/login")}>
               <Text style={styles.link}>Entrar</Text>
             </TouchableOpacity>
           </View>

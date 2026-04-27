@@ -17,15 +17,19 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
+    console.log("handleLogin chamado", { email, senha });
     if (!email || !senha) {
       Alert.alert("Erro", "Preencha todos os campos.");
       return;
     }
     setLoading(true);
     try {
+      console.log("tentando login...");
       await signInWithEmailAndPassword(auth, email, senha);
-      // O _layout.tsx detecta o user e redireciona automaticamente
+      console.log("login ok, redirecionando...");
+      router.replace('/(tabs)');
     } catch (error: any) {
+      console.log("ERRO:", error.code, error.message);
       const msg =
         error.code === "auth/invalid-credential"
           ? "Email ou senha incorretos."
@@ -41,14 +45,12 @@ export default function Login() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Header laranja */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Entrar</Text>
         <Text style={styles.headerSub}>Acesse sua conta Invicta Finanças</Text>
       </View>
 
       <View style={styles.form}>
-        {/* Email */}
         <View style={styles.inputWrapper}>
           <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
           <TextInput
@@ -62,7 +64,6 @@ export default function Login() {
           />
         </View>
 
-        {/* Senha */}
         <View style={styles.inputWrapper}>
           <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
           <TextInput
@@ -81,7 +82,6 @@ export default function Login() {
           </TouchableOpacity>
         </View>
 
-        {/* Botão entrar */}
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
@@ -93,7 +93,6 @@ export default function Login() {
           }
         </TouchableOpacity>
 
-        {/* Link pro cadastro */}
         <View style={styles.linkRow}>
           <Text style={styles.linkText}>Não tem uma conta? </Text>
           <TouchableOpacity onPress={() => router.push('/auth/cadastro')}>

@@ -17,7 +17,6 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
       }}
     >
-      /* Adição de -taBarStyle- com display none, para esconder as navegação padrão */
       <Tabs.Screen
         name="index"
         options={{
