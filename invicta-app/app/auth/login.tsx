@@ -27,7 +27,7 @@ export default function Login() {
       console.log("tentando login...");
       await signInWithEmailAndPassword(auth, email, senha);
       console.log("login ok, redirecionando...");
-      router.replace('/(tabs)');
+      router.replace("../(tabs)/dashboard");
     } catch (error: any) {
       console.log("ERRO:", error.code, error.message);
       const msg =

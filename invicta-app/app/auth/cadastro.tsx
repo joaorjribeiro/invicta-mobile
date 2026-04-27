@@ -49,7 +49,7 @@ export default function Cadastro() {
         limiteGastos: 0,
       });
       console.log("firestore salvo");
-      router.replace("/(tabs)");
+      router.replace("../(tabs)/dashboard");
     } catch (error: any) {
       console.log("ERRO:", error.code, error.message);
       const msg =
