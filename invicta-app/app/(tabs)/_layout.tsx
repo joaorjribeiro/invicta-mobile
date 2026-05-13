@@ -47,6 +47,26 @@ export default function TabLayout() {
           tabBarStyle: { display: "none" },
         }}
       />
+      <Tabs.Screen
+        name="transacoes"
+        options={{
+          title: "Transações",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="list.bullet" color={color} />
+          ),
+          tabBarStyle: { display: "none" },
+        }}
+      />
+      <Tabs.Screen
+        name="valores"
+        options={{
+          title: "Valores",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="list.bullet" color={color} />
+          ),
+          tabBarStyle: { display: "none" },
+        }}
+      />
     </Tabs>
   );
 }

@@ -209,7 +209,7 @@ export default function Dashboard() {
         {/* Botão Nova Transação */}
         <TouchableOpacity
           style={styles.novaTransacaoBtn}
-          onPress={() => router.push("../(tabs)/transacao")}
+          onPress={() => router.push("../(tabs)/transacoes")}
         >
           <Ionicons name="add-circle-outline" size={20} color="#fff" />
           <Text style={styles.novaTransacaoBtnText}>Nova Transação</Text>
