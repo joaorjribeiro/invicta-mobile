@@ -1,13 +1,27 @@
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Dimensions,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  getDoc,
+  getDocs,
+} from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { LineChart, BarChart } from "react-native-chart-kit";
 
@@ -53,93 +67,94 @@ export default function Dashboard() {
   const [despesasMensais, setDespesasMensais] = useState(new Array(12).fill(0));
   const [receitasMensais, setReceitasMensais] = useState(new Array(12).fill(0));
 
+  const saldoInicialRef = React.useRef(0);
+  saldoInicialRef.current = saldoInicial;
+
   useEffect(() => {
     if (!user) {
       router.replace("/auth/login");
       return;
     }
-    carregarDados();
-  }, []);
 
-  async function carregarDados() {
-    try {
-      // Configurações do usuário
-      const userDoc = await getDoc(doc(db, "users", user!.uid));
+    // 1. Dados do usuário
+    getDoc(doc(db, "users", user.uid)).then((userDoc) => {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setSaldoInicial(data.saldoInicial ?? 0);
+        saldoInicialRef.current = data.saldoInicial ?? 0;
         setRendaPrevista(data.rendaPrevista ?? 0);
         setLimiteGastos(data.limiteGastos ?? 0);
       }
+    });
 
-      // Últimas 5 transações
-      const qTransacoes = query(
-        collection(db, "transactions"),
-        where("userId", "==", user!.uid),
-        orderBy("data", "desc"),
-        limit(5)
-      );
-      const snapTransacoes = await getDocs(qTransacoes);
-      const listaTransacoes: Transacao[] = [];
-      let entradas = 0;
-      let saidas = 0;
+    // 2. Listener em tempo real para transações
+    const qTransacoes = query(
+      collection(db, "transactions"),
+      where("userId", "==", user.uid),
+      orderBy("data", "desc"),
+    );
 
-      snapTransacoes.forEach((d) => {
-        const t = { id: d.id, ...d.data() } as Transacao;
-        listaTransacoes.push(t);
-      });
-      setTransacoes(listaTransacoes);
+    const unsubTransacoes = onSnapshot(
+      qTransacoes,
+      (snap) => {
+        const todas: Transacao[] = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() } as Transacao),
+        );
 
-      // Todas as transações pra calcular saldo e gráficos
-      const qTodas = query(
-        collection(db, "transactions"),
-        where("userId", "==", user!.uid)
-      );
-      const snapTodas = await getDocs(qTodas);
-      const despesas = new Array(12).fill(0);
-      const receitas = new Array(12).fill(0);
+        setTransacoes(todas.slice(0, 5));
 
-      snapTodas.forEach((d) => {
-        const t = d.data();
-        const mes = t.data?.toDate ? t.data.toDate().getMonth() : new Date(t.data).getMonth();
-        if (t.tipo === "Entrada") {
-          entradas += t.valor;
-          receitas[mes] += t.valor;
-        } else {
-          saidas += t.valor;
-          despesas[mes] += t.valor;
-        }
-      });
+        const despesas = new Array(12).fill(0);
+        const receitas = new Array(12).fill(0);
+        let entradas = 0;
+        let saidas = 0;
 
-      setSaldoAtual(saldoInicial + entradas - saidas);
-      setDespesasMensais(despesas);
-      setReceitasMensais(receitas);
+        todas.forEach((t) => {
+          const mes = t.data?.toDate
+            ? t.data.toDate().getMonth()
+            : new Date(t.data).getMonth();
 
-      // Metas
-      const qMetas = query(
-        collection(db, "goals"),
-        where("userId", "==", user!.uid)
-      );
-      const snapMetas = await getDocs(qMetas);
-      const listaMetas: Meta[] = [];
-      snapMetas.forEach((d) => {
+          if (t.tipo === "Entrada") {
+            entradas += t.valor;
+            receitas[mes] += t.valor;
+          } else {
+            saidas += t.valor;
+            despesas[mes] += t.valor;
+          }
+        });
+
+        setSaldoAtual(saldoInicialRef.current + entradas - saidas);
+        setDespesasMensais(despesas);
+        setReceitasMensais(receitas);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Erro ao ouvir transações:", err);
+        setLoading(false);
+      },
+    );
+
+    // 3. Metas
+    getDocs(
+      query(collection(db, "goals"), where("userId", "==", user.uid)),
+    ).then((snap) => {
+      const listaMetas: Meta[] = snap.docs.map((d) => {
         const m = d.data();
-        listaMetas.push({
+        return {
           id: d.id,
           nome: m.nome,
           valorMeta: m.valorMeta,
           valorAtual: m.valorAtual,
-          progresso: m.valorMeta > 0 ? Math.min((m.valorAtual / m.valorMeta) * 100, 100) : 0,
-        });
+          progresso:
+            m.valorMeta > 0
+              ? Math.min((m.valorAtual / m.valorMeta) * 100, 100)
+              : 0,
+        };
       });
       setMetas(listaMetas);
+    });
 
-    } catch (e) {
-      console.log("Erro ao carregar dados:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
+    return () => unsubTransacoes();
+  }, [router, user]);
 
   async function handleLogout() {
     await signOut(auth);
@@ -164,7 +179,10 @@ export default function Dashboard() {
     );
   }
 
-  const mesesLabels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const mesesLabels = [
+    "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+    "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -172,20 +190,34 @@ export default function Dashboard() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Dashboard</Text>
-          <Text style={styles.headerSub}>Olá, {user?.displayName ?? "usuário"} 👋</Text>
+          <Text style={styles.headerSub}>
+            Olá, {user?.displayName ?? "usuário"} 👋
+          </Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Ionicons name="log-out-outline" size={24} color="#ef4b2a" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/valores")}
+            style={styles.headerBtn}
+          >
+            <Ionicons name="settings-outline" size={24} color="#ef4b2a" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
+            <Ionicons name="log-out-outline" size={24} color="#ef4b2a" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-
         {/* Cards */}
         <View style={styles.cardsRow}>
           <View style={[styles.card, { flex: 1 }]}>
             <Text style={styles.cardLabel}>Saldo Atual</Text>
-            <Text style={[styles.cardValue, { color: saldoAtual >= 0 ? "#22c55e" : "#ef4b2a" }]}>
+            <Text
+              style={[
+                styles.cardValue,
+                { color: saldoAtual >= 0 ? "#22c55e" : "#ef4b2a" },
+              ]}
+            >
               {formatCurrency(saldoAtual)}
             </Text>
           </View>
@@ -209,7 +241,7 @@ export default function Dashboard() {
         {/* Botão Nova Transação */}
         <TouchableOpacity
           style={styles.novaTransacaoBtn}
-          onPress={() => router.push("../(tabs)/transacoes")}
+          onPress={() => router.push("/(tabs)/transacoes")}
         >
           <Ionicons name="add-circle-outline" size={20} color="#fff" />
           <Text style={styles.novaTransacaoBtnText}>Nova Transação</Text>
@@ -261,10 +293,14 @@ export default function Dashboard() {
               <View key={meta.id} style={styles.metaItem}>
                 <View style={styles.metaHeader}>
                   <Text style={styles.metaNome}>{meta.nome}</Text>
-                  <Text style={styles.metaProgresso}>{Math.round(meta.progresso)}%</Text>
+                  <Text style={styles.metaProgresso}>
+                    {Math.round(meta.progresso)}%
+                  </Text>
                 </View>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${meta.progresso}%` }]} />
+                  <View
+                    style={[styles.progressFill, { width: `${meta.progresso}%` }]}
+                  />
                 </View>
                 <Text style={styles.metaValores}>
                   {formatCurrency(meta.valorAtual)} / {formatCurrency(meta.valorMeta)}
@@ -281,7 +317,9 @@ export default function Dashboard() {
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={40} color="#ccc" />
               <Text style={styles.emptyText}>Nenhuma transação ainda.</Text>
-              <Text style={styles.emptySubText}>Registre sua primeira transação!</Text>
+              <Text style={styles.emptySubText}>
+                Registre sua primeira transação!
+              </Text>
             </View>
           ) : (
             transacoes.map((t) => (
@@ -297,11 +335,14 @@ export default function Dashboard() {
                   <Text style={styles.transacaoDesc}>{t.descricao}</Text>
                   <Text style={styles.transacaoData}>{formatDate(t.data)}</Text>
                 </View>
-                <Text style={[
-                  styles.transacaoValor,
-                  { color: t.tipo === "Entrada" ? "#22c55e" : "#ef4b2a" }
-                ]}>
-                  {t.tipo === "Entrada" ? "+" : "-"}{formatCurrency(t.valor)}
+                <Text
+                  style={[
+                    styles.transacaoValor,
+                    { color: t.tipo === "Entrada" ? "#22c55e" : "#ef4b2a" },
+                  ]}
+                >
+                  {t.tipo === "Entrada" ? "+" : "-"}
+                  {formatCurrency(t.valor)}
                 </Text>
               </View>
             ))
@@ -326,24 +367,38 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   headerSub: { color: "#fff", opacity: 0.9, fontSize: 13, marginTop: 2 },
-  logoutBtn: { padding: 8, backgroundColor: "#fff", borderRadius: 8 },
+  headerBtn: { padding: 8, backgroundColor: "#fff", borderRadius: 8 },
   cardsRow: { flexDirection: "row", paddingHorizontal: 16, marginTop: 16 },
   card: {
-    backgroundColor: "#fff", padding: 16, borderRadius: 12,
-    elevation: 2, borderWidth: 1, borderColor: "#f0f0f0",
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   cardLabel: { color: "#888", fontSize: 13 },
   cardValue: { fontSize: 22, fontWeight: "bold", marginTop: 4 },
   novaTransacaoBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    backgroundColor: "#ef4b2a", margin: 16, padding: 14,
-    borderRadius: 10, gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ef4b2a",
+    margin: 16,
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
   },
   novaTransacaoBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
   section: {
-    backgroundColor: "#fff", margin: 16, marginTop: 0,
-    padding: 16, borderRadius: 12, elevation: 2,
-    borderWidth: 1, borderColor: "#f0f0f0",
+    backgroundColor: "#fff",
+    margin: 16,
+    marginTop: 0,
+    padding: 16,
+    borderRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 12, color: "#222" },
   chart: { borderRadius: 8, marginLeft: -8 },
@@ -358,8 +413,12 @@ const styles = StyleSheet.create({
   emptyText: { color: "#888", fontSize: 15, marginTop: 8 },
   emptySubText: { color: "#bbb", fontSize: 13, marginTop: 4 },
   transacaoItem: {
-    flexDirection: "row", alignItems: "center",
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f0f0f0", gap: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    gap: 12,
   },
   transacaoIcon: { width: 36 },
   transacaoDesc: { fontSize: 14, color: "#222", fontWeight: "500" },
