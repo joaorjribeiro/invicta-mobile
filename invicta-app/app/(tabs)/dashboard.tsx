@@ -8,7 +8,10 @@ import {
   ActivityIndicator,
   Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -24,7 +27,6 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { LineChart, BarChart } from "react-native-chart-kit";
-
 const screenWidth = Dimensions.get("window").width;
 
 const chartConfig = {
@@ -56,6 +58,7 @@ type Meta = {
 export default function Dashboard() {
   const router = useRouter();
   const user = auth.currentUser;
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [saldoInicial, setSaldoInicial] = useState(0);
@@ -76,7 +79,6 @@ export default function Dashboard() {
       return;
     }
 
-    // 1. Dados do usuário
     getDoc(doc(db, "users", user.uid)).then((userDoc) => {
       if (userDoc.exists()) {
         const data = userDoc.data();
@@ -87,7 +89,6 @@ export default function Dashboard() {
       }
     });
 
-    // 2. Listener em tempo real para transações
     const qTransacoes = query(
       collection(db, "transactions"),
       where("userId", "==", user.uid),
@@ -98,7 +99,7 @@ export default function Dashboard() {
       qTransacoes,
       (snap) => {
         const todas: Transacao[] = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() } as Transacao),
+          (d) => ({ id: d.id, ...d.data() }) as Transacao,
         );
 
         setTransacoes(todas.slice(0, 5));
@@ -133,7 +134,6 @@ export default function Dashboard() {
       },
     );
 
-    // 3. Metas
     getDocs(
       query(collection(db, "goals"), where("userId", "==", user.uid)),
     ).then((snap) => {
@@ -162,7 +162,10 @@ export default function Dashboard() {
   }
 
   function formatCurrency(value: number) {
-    return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return value.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
   }
 
   function formatDate(data: any) {
@@ -180,13 +183,22 @@ export default function Dashboard() {
   }
 
   const mesesLabels = [
-    "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-    "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Dashboard</Text>
@@ -207,8 +219,11 @@ export default function Dashboard() {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Cards */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: "#f5f5f5" }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+      >
         <View style={styles.cardsRow}>
           <View style={[styles.card, { flex: 1 }]}>
             <Text style={styles.cardLabel}>Saldo Atual</Text>
@@ -226,19 +241,22 @@ export default function Dashboard() {
         <View style={styles.cardsRow}>
           <View style={[styles.card, { flex: 1, marginRight: 8 }]}>
             <Text style={styles.cardLabel}>Receita Prevista</Text>
-            <Text style={[styles.cardValue, { color: "#22c55e", fontSize: 16 }]}>
+            <Text
+              style={[styles.cardValue, { color: "#22c55e", fontSize: 16 }]}
+            >
               {formatCurrency(rendaPrevista)}
             </Text>
           </View>
           <View style={[styles.card, { flex: 1, marginLeft: 8 }]}>
             <Text style={styles.cardLabel}>Limite de Gastos</Text>
-            <Text style={[styles.cardValue, { color: "#ef4b2a", fontSize: 16 }]}>
+            <Text
+              style={[styles.cardValue, { color: "#ef4b2a", fontSize: 16 }]}
+            >
               {formatCurrency(limiteGastos)}
             </Text>
           </View>
         </View>
 
-        {/* Botão Nova Transação */}
         <TouchableOpacity
           style={styles.novaTransacaoBtn}
           onPress={() => router.push("/(tabs)/transacoes")}
@@ -247,7 +265,6 @@ export default function Dashboard() {
           <Text style={styles.novaTransacaoBtnText}>Nova Transação</Text>
         </TouchableOpacity>
 
-        {/* Gráfico Despesas */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Despesas Mensais</Text>
           <BarChart
@@ -265,15 +282,22 @@ export default function Dashboard() {
           />
         </View>
 
-        {/* Gráfico Receitas x Despesas */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Receitas x Despesas</Text>
           <LineChart
             data={{
               labels: mesesLabels,
               datasets: [
-                { data: receitasMensais, color: () => "#22c55e", strokeWidth: 2 },
-                { data: despesasMensais, color: () => "#ef4b2a", strokeWidth: 2 },
+                {
+                  data: receitasMensais,
+                  color: () => "#22c55e",
+                  strokeWidth: 2,
+                },
+                {
+                  data: despesasMensais,
+                  color: () => "#ef4b2a",
+                  strokeWidth: 2,
+                },
               ],
               legend: ["Receitas", "Despesas"],
             }}
@@ -285,7 +309,6 @@ export default function Dashboard() {
           />
         </View>
 
-        {/* Metas */}
         {metas.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Metas Financeiras</Text>
@@ -299,18 +322,21 @@ export default function Dashboard() {
                 </View>
                 <View style={styles.progressBar}>
                   <View
-                    style={[styles.progressFill, { width: `${meta.progresso}%` }]}
+                    style={[
+                      styles.progressFill,
+                      { width: `${meta.progresso}%` },
+                    ]}
                   />
                 </View>
                 <Text style={styles.metaValores}>
-                  {formatCurrency(meta.valorAtual)} / {formatCurrency(meta.valorMeta)}
+                  {formatCurrency(meta.valorAtual)} /{" "}
+                  {formatCurrency(meta.valorMeta)}
                 </Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Últimas Transações */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Últimas Transações</Text>
           {transacoes.length === 0 ? (
@@ -326,7 +352,11 @@ export default function Dashboard() {
               <View key={t.id} style={styles.transacaoItem}>
                 <View style={styles.transacaoIcon}>
                   <Ionicons
-                    name={t.tipo === "Entrada" ? "arrow-up-circle" : "arrow-down-circle"}
+                    name={
+                      t.tipo === "Entrada"
+                        ? "arrow-up-circle"
+                        : "arrow-down-circle"
+                    }
                     size={28}
                     color={t.tipo === "Entrada" ? "#22c55e" : "#ef4b2a"}
                   />
@@ -348,15 +378,14 @@ export default function Dashboard() {
             ))
           )}
         </View>
-
-        <View style={{ height: 32 }} />
       </ScrollView>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f5" },
+  container: { flex: 1, backgroundColor: "#ef4b2a" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
     backgroundColor: "#ef4b2a",
@@ -400,10 +429,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
-  sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 12, color: "#222" },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 12,
+    color: "#222",
+  },
   chart: { borderRadius: 8, marginLeft: -8 },
   metaItem: { marginBottom: 16 },
-  metaHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  metaHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
   metaNome: { fontSize: 14, color: "#333", fontWeight: "500" },
   metaProgresso: { fontSize: 14, color: "#ef4b2a", fontWeight: "bold" },
   progressBar: { height: 8, backgroundColor: "#f0f0f0", borderRadius: 4 },
