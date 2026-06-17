@@ -14,12 +14,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 export default function ValoresScreen() {
   const router = useRouter();
-  const user = auth.currentUser;
+
+  // undefined = ainda não sabemos o estado de auth (Firebase carregando)
+  // null = sabemos que não tem usuário logado
+  // User = usuário logado
+  const [user, setUser] = useState<User | null | undefined>(undefined);
 
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -28,17 +33,31 @@ export default function ValoresScreen() {
   const [rendaPrevista, setRendaPrevista] = useState("");
   const [limiteGastos, setLimiteGastos] = useState("");
 
+  // Monitora o estado de autenticação. Só decide redirecionar
+  // depois que o Firebase confirma se há usuário ou não.
   useEffect(() => {
-    if (!user) {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    // Ainda não sabemos o estado de auth, espera.
+    if (user === undefined) return;
+
+    // Já sabemos que não há usuário logado, redireciona.
+    if (user === null) {
       router.replace("/auth/login");
       return;
     }
-    carregarValores();
-  }, []);
 
-  async function carregarValores() {
+    carregarValores(user.uid);
+  }, [user]);
+
+  async function carregarValores(uid: string) {
     try {
-      const snap = await getDoc(doc(db, "users", user!.uid));
+      const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) {
         const data = snap.data();
         setSaldoInicial(data.saldoInicial ? String(data.saldoInicial) : "");
@@ -53,6 +72,8 @@ export default function ValoresScreen() {
   }
 
   async function handleSalvar() {
+    if (!user) return;
+
     const saldo = parseFloat(saldoInicial.replace(",", ".")) || 0;
     const renda = parseFloat(rendaPrevista.replace(",", ".")) || 0;
     const limite = parseFloat(limiteGastos.replace(",", ".")) || 0;
@@ -60,14 +81,14 @@ export default function ValoresScreen() {
     setSalvando(true);
     try {
       await setDoc(
-        doc(db, "users", user!.uid),
+        doc(db, "users", user.uid),
         {
           saldoInicial: saldo,
           rendaPrevista: renda,
           limiteGastos: limite,
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
       Alert.alert("Sucesso", "Valores salvos com sucesso!", [
         { text: "OK", onPress: () => router.replace("/(tabs)/dashboard") },
@@ -80,12 +101,20 @@ export default function ValoresScreen() {
     }
   }
 
-  if (loading) {
+  // Mostra loading enquanto: não sabemos o estado de auth,
+  // ou já sabemos que tem usuário mas os dados ainda não chegaram.
+  if (user === undefined || (user && loading)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ef4b2a" />
       </View>
     );
+  }
+
+  // user === null: já disparamos o redirect no useEffect acima,
+  // não renderiza nada enquanto a navegação acontece.
+  if (!user) {
+    return null;
   }
 
   return (
@@ -108,9 +137,14 @@ export default function ValoresScreen() {
       >
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={20} color="#ef4b2a" />
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#ef4b2a"
+            />
             <Text style={styles.infoText}>
-              Configure os valores base da sua conta. Eles são usados para calcular seu saldo e exibir alertas no dashboard.
+              Configure os valores base da sua conta. Eles são usados para
+              calcular seu saldo e exibir alertas no dashboard.
             </Text>
           </View>
 
@@ -131,7 +165,9 @@ export default function ValoresScreen() {
                   placeholder="0,00"
                   placeholderTextColor="#bbb"
                   value={saldoInicial}
-                  onChangeText={(t) => setSaldoInicial(t.replace(/[^0-9.,]/g, ""))}
+                  onChangeText={(t) =>
+                    setSaldoInicial(t.replace(/[^0-9.,]/g, ""))
+                  }
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -142,7 +178,11 @@ export default function ValoresScreen() {
             {/* Renda Prevista */}
             <View style={styles.campo}>
               <View style={styles.campoHeader}>
-                <Ionicons name="trending-up-outline" size={20} color="#22c55e" />
+                <Ionicons
+                  name="trending-up-outline"
+                  size={20}
+                  color="#22c55e"
+                />
                 <Text style={styles.campoLabel}>Renda Mensal Prevista</Text>
               </View>
               <Text style={styles.campoDesc}>
@@ -155,7 +195,9 @@ export default function ValoresScreen() {
                   placeholder="0,00"
                   placeholderTextColor="#bbb"
                   value={rendaPrevista}
-                  onChangeText={(t) => setRendaPrevista(t.replace(/[^0-9.,]/g, ""))}
+                  onChangeText={(t) =>
+                    setRendaPrevista(t.replace(/[^0-9.,]/g, ""))
+                  }
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -166,11 +208,16 @@ export default function ValoresScreen() {
             {/* Limite de Gastos */}
             <View style={styles.campo}>
               <View style={styles.campoHeader}>
-                <Ionicons name="alert-circle-outline" size={20} color="#f59e0b" />
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={20}
+                  color="#f59e0b"
+                />
                 <Text style={styles.campoLabel}>Limite de Gastos Mensais</Text>
               </View>
               <Text style={styles.campoDesc}>
-                Valor máximo que você quer gastar por mês. O dashboard te avisa quando estiver próximo.
+                Valor máximo que você quer gastar por mês. O dashboard te avisa
+                quando estiver próximo.
               </Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.inputPrefix}>R$</Text>
@@ -179,7 +226,9 @@ export default function ValoresScreen() {
                   placeholder="0,00"
                   placeholderTextColor="#bbb"
                   value={limiteGastos}
-                  onChangeText={(t) => setLimiteGastos(t.replace(/[^0-9.,]/g, ""))}
+                  onChangeText={(t) =>
+                    setLimiteGastos(t.replace(/[^0-9.,]/g, ""))
+                  }
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -195,7 +244,11 @@ export default function ValoresScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={20}
+                  color="#fff"
+                />
                 <Text style={styles.salvarBtnText}>Salvar Valores</Text>
               </>
             )}
@@ -220,7 +273,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
-  backBtn: { backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 8, padding: 6 },
+  backBtn: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: 8,
+    padding: 6,
+  },
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -245,7 +302,12 @@ const styles = StyleSheet.create({
     borderColor: "#f0f0f0",
   },
   campo: { paddingVertical: 4 },
-  campoHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  campoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
   campoLabel: { fontSize: 15, fontWeight: "600", color: "#222" },
   campoDesc: { fontSize: 12, color: "#999", marginBottom: 12, lineHeight: 16 },
   inputWrap: {

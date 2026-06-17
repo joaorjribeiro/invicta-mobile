@@ -14,7 +14,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import {
   collection,
   query,
@@ -57,8 +57,9 @@ type Meta = {
 
 export default function Dashboard() {
   const router = useRouter();
-  const user = auth.currentUser;
   const insets = useSafeAreaInsets();
+
+  const [user, setUser] = useState<User | null | undefined>(undefined);
 
   const [loading, setLoading] = useState(true);
   const [saldoInicial, setSaldoInicial] = useState(0);
@@ -70,87 +71,101 @@ export default function Dashboard() {
   const [despesasMensais, setDespesasMensais] = useState(new Array(12).fill(0));
   const [receitasMensais, setReceitasMensais] = useState(new Array(12).fill(0));
 
-  const saldoInicialRef = React.useRef(0);
-  saldoInicialRef.current = saldoInicial;
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+    });
+    return () => unsubAuth();
+  }, []);
 
   useEffect(() => {
-    if (!user) {
-      router.replace("/auth/login");
+    if (user === undefined) return;
+
+    if (user === null) {
+      router.replace("/");
       return;
     }
 
+    let unsubTransacoes = () => {};
+
+    // 1. Busca os dados do usuário PRIMEIRO
     getDoc(doc(db, "users", user.uid)).then((userDoc) => {
+      let saldoBase = 0;
+
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setSaldoInicial(data.saldoInicial ?? 0);
-        saldoInicialRef.current = data.saldoInicial ?? 0;
+        saldoBase = data.saldoInicial ?? 0;
+        setSaldoInicial(saldoBase);
         setRendaPrevista(data.rendaPrevista ?? 0);
         setLimiteGastos(data.limiteGastos ?? 0);
       }
-    });
 
-    const qTransacoes = query(
-      collection(db, "transactions"),
-      where("userId", "==", user.uid),
-      orderBy("data", "desc"),
-    );
+      // 2. SÓ DEPOIS assina as transações, com saldoBase já conhecido
+      const qTransacoes = query(
+        collection(db, "transactions"),
+        where("userId", "==", user.uid),
+        orderBy("data", "desc"),
+      );
 
-    const unsubTransacoes = onSnapshot(
-      qTransacoes,
-      (snap) => {
-        const todas: Transacao[] = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Transacao,
-        );
+      unsubTransacoes = onSnapshot(
+        qTransacoes,
+        (snap) => {
+          const todas: Transacao[] = snap.docs.map(
+            (d) => ({ id: d.id, ...d.data() }) as Transacao,
+          );
 
-        setTransacoes(todas.slice(0, 5));
+          setTransacoes(todas.slice(0, 5));
 
-        const despesas = new Array(12).fill(0);
-        const receitas = new Array(12).fill(0);
-        let entradas = 0;
-        let saidas = 0;
+          const despesas = new Array(12).fill(0);
+          const receitas = new Array(12).fill(0);
+          let entradas = 0;
+          let saidas = 0;
 
-        todas.forEach((t) => {
-          const mes = t.data?.toDate
-            ? t.data.toDate().getMonth()
-            : new Date(t.data).getMonth();
+          todas.forEach((t) => {
+            const mes = t.data?.toDate
+              ? t.data.toDate().getMonth()
+              : new Date(t.data).getMonth();
 
-          if (t.tipo === "Entrada") {
-            entradas += t.valor;
-            receitas[mes] += t.valor;
-          } else {
-            saidas += t.valor;
-            despesas[mes] += t.valor;
-          }
+            if (t.tipo === "Entrada") {
+              entradas += t.valor;
+              receitas[mes] += t.valor;
+            } else {
+              saidas += t.valor;
+              despesas[mes] += t.valor;
+            }
+          });
+
+          // saldoBase é variável local capturada no closure — sempre correto
+          setSaldoAtual(saldoBase + entradas - saidas);
+          setDespesasMensais(despesas);
+          setReceitasMensais(receitas);
+          setLoading(false);
+        },
+        (err) => {
+          console.error("Erro ao ouvir transações:", err);
+          setLoading(false);
+        },
+      );
+
+      // Metas podem continuar paralelas, não afetam o saldo
+      getDocs(
+        query(collection(db, "goals"), where("userId", "==", user.uid)),
+      ).then((snap) => {
+        const listaMetas: Meta[] = snap.docs.map((d) => {
+          const m = d.data();
+          return {
+            id: d.id,
+            nome: m.nome,
+            valorMeta: m.valorMeta,
+            valorAtual: m.valorAtual,
+            progresso:
+              m.valorMeta > 0
+                ? Math.min((m.valorAtual / m.valorMeta) * 100, 100)
+                : 0,
+          };
         });
-
-        setSaldoAtual(saldoInicialRef.current + entradas - saidas);
-        setDespesasMensais(despesas);
-        setReceitasMensais(receitas);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Erro ao ouvir transações:", err);
-        setLoading(false);
-      },
-    );
-
-    getDocs(
-      query(collection(db, "goals"), where("userId", "==", user.uid)),
-    ).then((snap) => {
-      const listaMetas: Meta[] = snap.docs.map((d) => {
-        const m = d.data();
-        return {
-          id: d.id,
-          nome: m.nome,
-          valorMeta: m.valorMeta,
-          valorAtual: m.valorAtual,
-          progresso:
-            m.valorMeta > 0
-              ? Math.min((m.valorAtual / m.valorMeta) * 100, 100)
-              : 0,
-        };
+        setMetas(listaMetas);
       });
-      setMetas(listaMetas);
     });
 
     return () => unsubTransacoes();
@@ -158,7 +173,7 @@ export default function Dashboard() {
 
   async function handleLogout() {
     await signOut(auth);
-    router.replace("/auth/login");
+    router.replace("/");
   }
 
   function formatCurrency(value: number) {
@@ -174,12 +189,16 @@ export default function Dashboard() {
     return date.toLocaleDateString("pt-BR");
   }
 
-  if (loading) {
+  if (user === undefined || (user && loading)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ef4b2a" />
       </View>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   const mesesLabels = [
@@ -379,7 +398,6 @@ export default function Dashboard() {
           )}
         </View>
       </ScrollView>
-
     </SafeAreaView>
   );
 }

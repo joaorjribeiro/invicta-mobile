@@ -26,7 +26,6 @@ export default function Cadastro() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
-  // Regras de senha
   const hasMinLength = senha.length >= 8;
   const hasUpper = /[A-Z]/.test(senha);
   const hasLower = /[a-z]/.test(senha);
@@ -81,7 +80,8 @@ export default function Cadastro() {
         rendaPrevista: 0,
         limiteGastos: 0,
       });
-      router.replace("/auth/login");
+      // ✅ push em vez de replace — index continua na pilha
+      router.push("/auth/login");
     } catch (error: any) {
       const msg =
         error.code === "auth/email-already-in-use"
@@ -107,7 +107,6 @@ export default function Cadastro() {
         </View>
 
         <View style={styles.form}>
-          {/* Nome */}
           <View style={styles.inputWrapper}>
             <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -119,7 +118,6 @@ export default function Cadastro() {
             />
           </View>
 
-          {/* Email */}
           <View style={styles.inputWrapper}>
             <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -133,7 +131,6 @@ export default function Cadastro() {
             />
           </View>
 
-          {/* Senha */}
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -153,7 +150,6 @@ export default function Cadastro() {
             </TouchableOpacity>
           </View>
 
-          {/* Requisitos */}
           {senha.length > 0 && (
             <View style={styles.requisitosBox}>
               <Requisito valido={hasMinLength} texto="8 caracteres" />
@@ -164,7 +160,6 @@ export default function Cadastro() {
             </View>
           )}
 
-          {/* Confirmar senha */}
           <View style={styles.inputWrapper}>
             <Ionicons name="key-outline" size={20} color="#999" style={styles.inputIcon} />
             <TextInput
@@ -207,6 +202,7 @@ export default function Cadastro() {
             )}
           </TouchableOpacity>
 
+          {/* ✅ push em vez de replace */}
           <TouchableOpacity onPress={() => router.push("/auth/login")}>
             <Text style={styles.link}>
               Já tem uma conta? <Text style={styles.linkDestaque}>Entrar</Text>
