@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { LineChart, BarChart } from "react-native-chart-kit";
+import AlertaLimiteGastos from "@/components/AlertaLimiteGastos";
 const screenWidth = Dimensions.get("window").width;
 
 const chartConfig = {
@@ -70,6 +71,9 @@ export default function Dashboard() {
   const [metas, setMetas] = useState<Meta[]>([]);
   const [despesasMensais, setDespesasMensais] = useState(new Array(12).fill(0));
   const [receitasMensais, setReceitasMensais] = useState(new Array(12).fill(0));
+
+  const [alertaVisible, setAlertaVisible] = useState(false);
+  const ultimoNivelNotificado = useRef(0);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -171,6 +175,19 @@ export default function Dashboard() {
     return () => unsubTransacoes();
   }, [router, user]);
 
+  // Verifica se cruzou um novo marco percentual do limite de gastos
+  useEffect(() => {
+    const mes = new Date().getMonth();
+    const gastoMes = despesasMensais[mes] ?? 0;
+    const percentual = limiteGastos > 0 ? (gastoMes / limiteGastos) * 100 : 0;
+    const marcos = [60, 70, 80, 90, 100];
+    const atingido = marcos.filter((m) => percentual >= m).pop();
+    if (atingido && atingido > ultimoNivelNotificado.current) {
+      ultimoNivelNotificado.current = atingido;
+      setAlertaVisible(true);
+    }
+  }, [despesasMensais, limiteGastos]);
+
   async function handleLogout() {
     await signOut(auth);
     router.replace("/");
@@ -216,6 +233,15 @@ export default function Dashboard() {
     "Dez",
   ];
 
+  const mesAtual = new Date().getMonth();
+  const gastoMesAtual = despesasMensais[mesAtual] ?? 0;
+  const percentualGasto = limiteGastos > 0 ? (gastoMesAtual / limiteGastos) * 100 : 0;
+  const corAlertaHeader =
+    percentualGasto >= 90 ? "#dc2626" :
+    percentualGasto >= 80 ? "#ef4444" :
+    percentualGasto >= 70 ? "#f97316" :
+    percentualGasto >= 60 ? "#f59e0b" : "#ef4b2a";
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
@@ -226,6 +252,12 @@ export default function Dashboard() {
           </Text>
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setAlertaVisible(true)}
+            style={styles.headerBtn}
+          >
+            <Ionicons name="warning-outline" size={24} color={corAlertaHeader} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push("/(tabs)/valores")}
             style={styles.headerBtn}
@@ -398,6 +430,13 @@ export default function Dashboard() {
           )}
         </View>
       </ScrollView>
+
+      <AlertaLimiteGastos
+        visible={alertaVisible}
+        onClose={() => setAlertaVisible(false)}
+        gastoAtual={gastoMesAtual}
+        limite={limiteGastos}
+      />
     </SafeAreaView>
   );
 }

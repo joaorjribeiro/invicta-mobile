@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +27,7 @@ export default function ValoresScreen() {
   const [saldoInicial, setSaldoInicial] = useState("");
   const [rendaPrevista, setRendaPrevista] = useState("");
   const [limiteGastos, setLimiteGastos] = useState("");
+  const [modalSucesso, setModalSucesso] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -71,9 +73,7 @@ export default function ValoresScreen() {
         { saldoInicial: saldo, rendaPrevista: renda, limiteGastos: limite, updatedAt: serverTimestamp() },
         { merge: true },
       );
-      Alert.alert("Sucesso", "Valores salvos com sucesso!", [
-        { text: "OK", onPress: () => router.replace("/(tabs)/dashboard") },
-      ]);
+      setModalSucesso(true);
     } catch (e) {
       Alert.alert("Erro", "Não foi possível salvar os valores.");
       console.error(e);
@@ -167,6 +167,27 @@ export default function ValoresScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={modalSucesso} transparent animationType="fade" onRequestClose={() => setModalSucesso(false)}>
+        <View style={styles.sucessoOverlay}>
+          <View style={styles.sucessoCard}>
+            <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
+            <Text style={styles.sucessoTitulo}>Valores salvos!</Text>
+            <Text style={styles.sucessoMensagem}>
+              Suas configurações financeiras foram atualizadas com sucesso.
+            </Text>
+            <TouchableOpacity
+              style={styles.sucessoBtn}
+              onPress={() => {
+                setModalSucesso(false);
+                router.replace("/(tabs)/dashboard");
+              }}
+            >
+              <Text style={styles.sucessoBtnText}>Ir para o Dashboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -210,4 +231,10 @@ const styles = StyleSheet.create({
     gap: 8, backgroundColor: "#ef4b2a", marginHorizontal: 16, padding: 16, borderRadius: 14,
   },
   salvarBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  sucessoOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
+  sucessoCard: { width: "100%", maxWidth: 340, backgroundColor: "#fff", borderRadius: 20, padding: 24, alignItems: "center" },
+  sucessoTitulo: { fontSize: 17, fontWeight: "bold", color: "#222", marginTop: 12 },
+  sucessoMensagem: { fontSize: 13, color: "#888", textAlign: "center", marginTop: 6, marginBottom: 18, lineHeight: 18 },
+  sucessoBtn: { width: "100%", backgroundColor: "#22c55e", paddingVertical: 13, borderRadius: 12, alignItems: "center" },
+  sucessoBtnText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
 });
